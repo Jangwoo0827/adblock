@@ -76,6 +76,37 @@
     queued.forEach(run);
   }
 
+  // ---- Social / ad pixels (their scripts are blocked; page code still calls them) ----
+  // Each stub mimics the loader snippet's queue-function shape so `fbq('track', …)` etc. never throw.
+  const queueStub = (name, extra) => {
+    if (typeof w[name] === 'function') return;
+    const f = function () {};
+    f.queue = []; f.push = noop; f.loaded = true; f.version = '2.0';
+    Object.assign(f, extra);
+    w[name] = f;
+  };
+  queueStub('fbq', { callMethod: noop, instance: {} });  // Facebook / Meta Pixel
+  if (!w._fbq) w._fbq = w.fbq;
+  queueStub('twq', { exe: noop });                      // X / Twitter
+  queueStub('pintrk');                                  // Pinterest
+  queueStub('snaptr', { handleRequest: noop });         // Snapchat
+  queueStub('rdt', { sendEvent: noop });                // Reddit
+  queueStub('qp');                                      // Quora
+  queueStub('uetq');                                    // Bing / Microsoft Ads
+  queueStub('obApi');                                   // Outbrain
+  queueStub('lintrk');                                  // LinkedIn Insight
+  if (!Array.isArray(w._linkedin_data_partner_ids)) w._linkedin_data_partner_ids = [];
+  if (!w.ttq) {                                         // TikTok Pixel
+    const ttq = { load: noop, page: noop, track: noop, identify: noop, instance: () => ttq,
+                  on: noop, off: noop, ready: fn => later(fn), push: noop };
+    w.ttq = ttq;
+  }
+  if (!w._tfa) w._tfa = { push: noop };                 // Taboola
+  if (!w.hj) w.hj = function () {};                    // Hotjar
+  if (!w.clarity) w.clarity = function () {};          // Microsoft Clarity
+  if (!w.mixpanel) w.mixpanel = { init: noop, track: noop, identify: noop, register: noop,
+                                  people: { set: noop }, push: noop, __loaded: true };
+
   // ---- AdSense ----
   if (!w.adsbygoogle || Array.isArray(w.adsbygoogle)) {
     w.adsbygoogle = { loaded: true, push: noop };
