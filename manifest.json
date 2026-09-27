@@ -24,7 +24,8 @@
   },
   "declarative_net_request": {
     "rule_resources": [
-      { "id": "baseline", "enabled": true, "path": "rules/baseline.json" }
+      { "id": "baseline", "enabled": true, "path": "rules/baseline.json" },
+      { "id": "consent", "enabled": true, "path": "rules/consent.json" }
     ]
   },
   "action": {

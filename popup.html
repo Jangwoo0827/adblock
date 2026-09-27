@@ -63,6 +63,13 @@
     .list .n { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
     .meta { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
 
+    .option { display: flex; align-items: center; gap: 12px; }
+    .option b { display: block; font-size: 12.5px; font-weight: 600; }
+    .option span { display: block; font-size: 11px; color: var(--muted); }
+    .switch.small { width: 36px; height: 22px; }
+    .switch.small .slider::before { width: 18px; height: 18px; }
+    .switch.small input:checked + .slider::before { transform: translateX(14px); }
+
     .actions { display: flex; gap: 8px; }
     button { flex: 1; font: inherit; font-weight: 550; padding: 8px 10px; border-radius: 9px;
              border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
@@ -101,6 +108,17 @@
       <h2>Filter lists</h2>
       <div id="lists"></div>
       <div class="meta" id="meta">Not downloaded yet</div>
+    </section>
+
+    <section class="card option">
+      <div>
+        <b>Block cookie banners &amp; A/B tests</b>
+        <span>Consent popups, Optimizely, LaunchDarkly… may break a few sites</span>
+      </div>
+      <label class="switch small">
+        <input type="checkbox" id="consent" checked>
+        <span class="slider"></span>
+      </label>
     </section>
 
     <section class="actions">

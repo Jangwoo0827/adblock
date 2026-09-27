@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": [
+        "cookielaw.org", "onetrust.com", "cookiebot.com", "trustarc.com", "privacy-center.org",
+        "didomi.io", "privacy-mgmt.com", "usercentrics.eu", "cmp.inmobi.com", "consensu.org",
+        "osano.com", "fundingchoicesmessages.google.com", "consentmanager.net", "cookieyes.com",
+        "cdn.iubenda.com", "termly.io", "cookie-script.com", "cookiefirst.com", "cookiehub.net",
+        "quantcast.mgr.consensu.org", "sourcepoint.com", "truste.com", "evidon.com", "crownpeak.net",
+        "optimizely.com", "dynamicyield.com", "launchdarkly.com", "visualwebsiteoptimizer.com",
+        "abtasty.com", "kameleoon.eu", "kameleoon.io", "convertexperiments.com", "googleoptimize.com",
+        "omniconvert.com", "abtest.io", "statsig.com", "growthbook.io", "split.io", "unbounce.com"
+      ],
+      "resourceTypes": [
+        "script", "sub_frame", "image", "xmlhttprequest", "ping", "media",
+        "object", "stylesheet", "font", "websocket", "other"
+      ]
+    }
+  }
+]

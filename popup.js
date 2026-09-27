@@ -69,6 +69,13 @@ $('toggle').addEventListener('change', () => {
   renderEnabled($('toggle').checked);
 });
 
+chrome.storage.local.get({ blockConsent: true }, ({ blockConsent }) => {
+  $('consent').checked = blockConsent;
+});
+$('consent').addEventListener('change', () => {
+  chrome.storage.local.set({ blockConsent: $('consent').checked });
+});
+
 $('update').addEventListener('click', () => {
   setUpdating(true);
   chrome.runtime.sendMessage({ type: 'update' }, res => {

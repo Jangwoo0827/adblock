@@ -348,9 +348,11 @@ async function applyEnabled(enabled) {
     }]
   });
 
-  await chrome.declarativeNetRequest.updateEnabledRulesets(
-    enabled ? { enableRulesetIds: ['baseline'] } : { disableRulesetIds: ['baseline'] }
-  );
+  const { blockConsent } = await chrome.storage.local.get({ blockConsent: true });
+  const on = [], off = [];
+  (enabled ? on : off).push('baseline');
+  (enabled && blockConsent ? on : off).push('consent');
+  await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: on, disableRulesetIds: off });
 
   const registered = await chrome.scripting.getRegisteredContentScripts({ ids: ['scriptlets'] });
   if (enabled && !registered.length) {
@@ -369,7 +371,9 @@ async function applyEnabled(enabled) {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.enabled) applyEnabled(changes.enabled.newValue);
+  if (area !== 'local') return;
+  if (changes.enabled) applyEnabled(changes.enabled.newValue);
+  else if (changes.blockConsent) isEnabled().then(applyEnabled);
 });
 
 // ============================================================
