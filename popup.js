@@ -69,12 +69,14 @@ $('toggle').addEventListener('change', () => {
   renderEnabled($('toggle').checked);
 });
 
-chrome.storage.local.get({ blockConsent: true }, ({ blockConsent }) => {
-  $('consent').checked = blockConsent;
+// Optional rulesets: checkbox id -> storage key (both default on)
+const OPTIONS = { consent: 'blockConsent', strict: 'blockStrict' };
+chrome.storage.local.get({ blockConsent: true, blockStrict: true }, data => {
+  for (const [id, key] of Object.entries(OPTIONS)) $(id).checked = data[key];
 });
-$('consent').addEventListener('change', () => {
-  chrome.storage.local.set({ blockConsent: $('consent').checked });
-});
+for (const [id, key] of Object.entries(OPTIONS)) {
+  $(id).addEventListener('change', () => chrome.storage.local.set({ [key]: $(id).checked }));
+}
 
 $('update').addEventListener('click', () => {
   setUpdating(true);

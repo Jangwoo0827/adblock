@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "priority": 3,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["redirector.googlevideo.com"],
+      "excludedInitiatorDomains": ["youtube.com", "youtube-nocookie.com", "youtubekids.com", "google.com"],
+      "resourceTypes": ["xmlhttprequest", "media", "script", "sub_frame", "image", "ping", "other"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 3,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["graph.facebook.com", "graph.instagram.com", "i.instagram.com"],
+      "excludedInitiatorDomains": ["facebook.com", "messenger.com", "instagram.com", "threads.net", "threads.com", "meta.com", "whatsapp.com"],
+      "resourceTypes": ["xmlhttprequest", "script", "sub_frame", "image", "ping", "other", "websocket"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 3,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["ssl.p.jwpcdn.com"],
+      "excludedInitiatorDomains": ["jwplayer.com", "jwplatform.com"],
+      "resourceTypes": ["xmlhttprequest", "script", "sub_frame", "image", "ping", "other", "media", "stylesheet"]
+    }
+  }
+]

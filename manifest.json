@@ -26,7 +26,8 @@
     "rule_resources": [
       { "id": "baseline", "enabled": true, "path": "rules/baseline.json" },
       { "id": "trackers", "enabled": true, "path": "rules/trackers.json" },
-      { "id": "consent", "enabled": true, "path": "rules/consent.json" }
+      { "id": "consent", "enabled": true, "path": "rules/consent.json" },
+      { "id": "strict", "enabled": true, "path": "rules/strict.json" }
     ]
   },
   "action": {

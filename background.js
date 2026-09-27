@@ -348,10 +348,11 @@ async function applyEnabled(enabled) {
     }]
   });
 
-  const { blockConsent } = await chrome.storage.local.get({ blockConsent: true });
+  const { blockConsent, blockStrict } = await chrome.storage.local.get({ blockConsent: true, blockStrict: true });
   const on = [], off = [];
   (enabled ? on : off).push('baseline', 'trackers');
   (enabled && blockConsent ? on : off).push('consent');
+  (enabled && blockStrict ? on : off).push('strict');
   await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: on, disableRulesetIds: off });
 
   const registered = await chrome.scripting.getRegisteredContentScripts({ ids: ['scriptlets'] });
@@ -373,7 +374,7 @@ async function applyEnabled(enabled) {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (changes.enabled) applyEnabled(changes.enabled.newValue);
-  else if (changes.blockConsent) isEnabled().then(applyEnabled);
+  else if (changes.blockConsent || changes.blockStrict) isEnabled().then(applyEnabled);
 });
 
 // ============================================================
