@@ -37,16 +37,6 @@
     '#masthead-ad'
   ].join(',');
 
-  const SKIP_BUTTONS = [
-    '.ytp-skip-ad-button',
-    '.ytp-ad-skip-button-modern',
-    '.ytp-ad-skip-button',
-    '.ytp-ad-skip-button-slot button',
-    '.ytp-ad-skip-button-container button',
-    '[id^="skip-button"] button',
-    'button[id^="skip-button"]'
-  ].join(',');
-
   let enabled = true;
   let observer = null;
   let scheduled = false;
@@ -105,29 +95,36 @@
   }
 
   // ---- YouTube Engine ----
+  // Chrome caps playbackRate at 16x, so the real speed-up is seeking straight to the ad's end.
+  // The seek is retried while the ad is on screen because duration is often unknown (NaN)
+  // for the first moments of an ad, and YouTube may load a second ad back-to-back.
+  const MAX_RATE = 16;
   let adPoll = null;
+  let hookedVideo = null;
 
-  function clickSkip() {
-    for (const btn of document.querySelectorAll(SKIP_BUTTONS)) {
-      const rect = btn.getBoundingClientRect();
-      if (!rect.width || !rect.height) continue; // still hidden behind the countdown
-      // Full pointer sequence: YouTube's handlers listen on pointer/mouse events, not just click
-      const opts = {
-        bubbles: true, cancelable: true, composed: true, view: window, button: 0,
-        clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2
-      };
-      btn.dispatchEvent(new PointerEvent('pointerdown', opts));
-      btn.dispatchEvent(new MouseEvent('mousedown', opts));
-      btn.dispatchEvent(new PointerEvent('pointerup', opts));
-      btn.dispatchEvent(new MouseEvent('mouseup', opts));
-      btn.click();
-      return;
+  function jumpToEnd(video) {
+    if (isFinite(video.duration) && video.duration > 0 && video.currentTime < video.duration - 0.05) {
+      video.currentTime = video.duration;
     }
   }
+
+  function onAdMediaEvent(e) {
+    if (adActive) jumpToEnd(e.target);
+  }
+
   function handleYouTubeAd() {
     const player = document.querySelector('.html5-video-player');
     const video = document.querySelector('video.html5-main-video') || document.querySelector('video');
     if (!player || !video) return;
+
+    // Seek the moment the ad's duration becomes known, not on the next poll tick
+    if (hookedVideo !== video) {
+      hookedVideo?.removeEventListener('loadedmetadata', onAdMediaEvent);
+      hookedVideo?.removeEventListener('durationchange', onAdMediaEvent);
+      video.addEventListener('loadedmetadata', onAdMediaEvent);
+      video.addEventListener('durationchange', onAdMediaEvent);
+      hookedVideo = video;
+    }
 
     const showing = player.classList.contains('ad-showing') ||
                     player.classList.contains('ad-interrupting');
@@ -136,18 +133,13 @@
       if (!adActive) {
         adActive = true;
         savedMuted = video.muted;
-        savedRate = video.playbackRate === 16 ? 1 : video.playbackRate;
+        savedRate = video.playbackRate === MAX_RATE ? 1 : video.playbackRate;
         bumpYouTube();
       }
       video.muted = true;
-      if (video.playbackRate !== 16) video.playbackRate = 16;
-      if (isFinite(video.duration) && video.duration > 0 && video.currentTime < video.duration - 0.1) {
-        video.currentTime = video.duration - 0.1;
-      }
-      clickSkip();
-      // The skip button is revealed by an inline-style change after the countdown,
-      // which the observer doesn't see — poll lightly only while an ad is on screen.
-      if (!adPoll) adPoll = setInterval(handleYouTubeAd, 250);
+      if (video.playbackRate !== MAX_RATE) video.playbackRate = MAX_RATE;
+      jumpToEnd(video);
+      if (!adPoll) adPoll = setInterval(handleYouTubeAd, 100);
     } else if (adActive) {
       adActive = false;
       clearInterval(adPoll);
