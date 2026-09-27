@@ -350,7 +350,7 @@ async function applyEnabled(enabled) {
 
   const { blockConsent } = await chrome.storage.local.get({ blockConsent: true });
   const on = [], off = [];
-  (enabled ? on : off).push('baseline');
+  (enabled ? on : off).push('baseline', 'trackers');
   (enabled && blockConsent ? on : off).push('consent');
   await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: on, disableRulesetIds: off });
 
