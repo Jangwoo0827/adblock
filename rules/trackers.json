@@ -204,5 +204,33 @@
         "sub_frame"
       ]
     }
+  },
+  {
+    "id": 4,
+    "priority": 3,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "Sec-GPC",
+          "operation": "set",
+          "value": "1"
+        }
+      ]
+    },
+    "condition": {
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "image",
+        "stylesheet",
+        "font",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
   }
 ]

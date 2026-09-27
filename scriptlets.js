@@ -107,6 +107,34 @@
   if (!w.mixpanel) w.mixpanel = { init: noop, track: noop, identify: noop, register: noop,
                                   people: { set: noop }, push: noop, __loaded: true };
 
+  // ---- Privacy Sandbox: remove Chromium's in-browser ad-targeting APIs ----
+  // Topics, Protected Audience (FLEDGE), Attribution Reporting, Private State Tokens, Shared Storage.
+  // Pages feature-detect these, so removing them just looks like an older/other browser.
+  const strip = (proto, props) => {
+    if (!proto) return;
+    for (const p of props) {
+      try { if (p in proto) delete proto[p]; } catch (_) {}
+    }
+  };
+  strip(w.Document && Document.prototype, ['browsingTopics', 'hasPrivateToken', 'hasRedemptionRecord']);
+  strip(w.Navigator && Navigator.prototype, [
+    'joinAdInterestGroup', 'leaveAdInterestGroup', 'clearOriginJoinedAdInterestGroups',
+    'updateAdInterestGroups', 'runAdAuction', 'createAuctionNonce', 'canLoadAdAuctionFencedFrame',
+    'deprecatedURNToURL', 'deprecatedReplaceInURN', 'getInterestGroupAdAuctionData', 'protectedAudience'
+  ]);
+  for (const el of ['HTMLAnchorElement', 'HTMLImageElement', 'HTMLScriptElement', 'HTMLAreaElement']) {
+    strip(w[el] && w[el].prototype, ['attributionSrc']);
+  }
+  strip(w.Window && Window.prototype, ['sharedStorage']);
+  strip(w, ['sharedStorage']);
+
+  // ---- Global Privacy Control: tell sites "do not sell/share" (legally binding in CA, CO, …) ----
+  try {
+    if (w.Navigator && !navigator.globalPrivacyControl) {
+      Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true, configurable: true });
+    }
+  } catch (_) {}
+
   // ---- AdSense ----
   if (!w.adsbygoogle || Array.isArray(w.adsbygoogle)) {
     w.adsbygoogle = { loaded: true, push: noop };
