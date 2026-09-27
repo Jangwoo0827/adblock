@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const LIST_NAMES = { easylist: 'EasyList', easyprivacy: 'EasyPrivacy' };
+const LIST_NAMES = { easylist: 'EasyList', easyprivacy: 'EasyPrivacy', hagezi: 'HaGeZi Pro' };
 const fmt = n => (n || 0).toLocaleString();
 
 function renderEnabled(enabled) {
@@ -45,7 +45,7 @@ function renderMeta(meta) {
     lists.append(row);
   }
   $('meta').textContent = meta
-    ? `${fmt(meta.networkRules)} network rules active · updated ${timeAgo(meta.updatedAt)}`
+    ? `${fmt(meta.networkRules)} rules + ${fmt(meta.blockedDomains)} domains · updated ${timeAgo(meta.updatedAt)}`
     : 'Not downloaded yet — lists fetch automatically after install.';
 }
 

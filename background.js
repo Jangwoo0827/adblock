@@ -5,8 +5,15 @@
 // ============================================================
 const LISTS = [
   { id: 'easylist',    name: 'EasyList',    url: 'https://easylist.to/easylist/easylist.txt' },
-  { id: 'easyprivacy', name: 'EasyPrivacy', url: 'https://easylist.to/easylist/easyprivacy.txt' }
+  { id: 'easyprivacy', name: 'EasyPrivacy', url: 'https://easylist.to/easylist/easyprivacy.txt' },
+  // Domain blocklist (ads, trackers, telemetry, malware) — ~200k hosts, packed into few DNR rules
+  { id: 'hagezi',      name: 'HaGeZi Pro',  url: 'https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt' }
 ];
+
+// "||example.com^" with no options = block the whole host. These are packed into
+// requestDomains arrays instead of one rule each, so they don't eat the dynamic-rule cap.
+const PLAIN_DOMAIN = /^\|\|([a-z0-9][a-z0-9.-]*\.[a-z0-9-]+)\^$/i;
+const DOMAINS_PER_RULE = 5000;
 
 const PAUSE_RULE_ID = 1;          // allowAllRequests rule used when the blocker is OFF
 const FIRST_LIST_RULE_ID = 1000;  // dynamic rules converted from the lists start here
@@ -154,6 +161,9 @@ function parseList(text, out) {
       continue;
     }
 
+    const plain = line.match(PLAIN_DOMAIN);
+    if (plain) { out.domains.add(plain[1].toLowerCase()); network++; continue; }
+
     const parsed = parseNetwork(line);
     if (parsed) { out.network.push(parsed); network++; }
   }
@@ -163,7 +173,30 @@ function parseList(text, out) {
 // ============================================================
 //  Install rules into declarativeNetRequest (native matching, no JS per request)
 // ============================================================
-async function installNetworkRules(parsed) {
+// Drop hosts already covered by a listed parent (requestDomains matches subdomains too).
+function collapseDomains(domains) {
+  const kept = [];
+  for (const d of domains) {
+    let covered = false;
+    for (let i = d.indexOf('.'); i !== -1; i = d.indexOf('.', i + 1)) {
+      if (domains.has(d.slice(i + 1))) { covered = true; break; }
+    }
+    if (!covered) kept.push(d);
+  }
+  return kept.sort();
+}
+
+async function installNetworkRules(parsed, domainSet) {
+  const domains = collapseDomains(domainSet);
+  const packed = [];
+  for (let i = 0; i < domains.length; i += DOMAINS_PER_RULE) {
+    packed.push({
+      priority: 1,
+      action: { type: 'block' },
+      condition: { requestDomains: domains.slice(i, i + DOMAINS_PER_RULE), resourceTypes: ALL_TYPES }
+    });
+  }
+
   const seen = new Set();
   const unique = [];
   for (const p of parsed) {
@@ -172,8 +205,9 @@ async function installNetworkRules(parsed) {
   }
   unique.sort((a, b) => b.score - a.score);
 
-  const max = (chrome.declarativeNetRequest.MAX_NUMBER_OF_DYNAMIC_RULES || 5000) - 10;
-  const rules = unique.slice(0, max).map((p, i) => ({ id: FIRST_LIST_RULE_ID + i, ...p.rule }));
+  const max = (chrome.declarativeNetRequest.MAX_NUMBER_OF_DYNAMIC_RULES || 5000) - 10 - packed.length;
+  const rules = [...packed, ...unique.slice(0, max).map(p => p.rule)]
+    .map((r, i) => ({ id: FIRST_LIST_RULE_ID + i, ...r }));
 
   const existing = await chrome.declarativeNetRequest.getDynamicRules();
   await chrome.declarativeNetRequest.updateDynamicRules({
@@ -193,8 +227,8 @@ async function installNetworkRules(parsed) {
       await add(batch.slice(mid));
     }
   }
-  for (let i = 0; i < rules.length; i += 5000) await add(rules.slice(i, i + 5000));
-  return { added, total: unique.length };
+  for (let i = 0; i < rules.length; i += 2000) await add(rules.slice(i, i + 2000));
+  return { added: added - packed.length, total: unique.length, domains: domains.length };
 }
 
 // ============================================================
@@ -212,7 +246,7 @@ function updateLists() {
     }));
     if (results.every(r => r.status === 'rejected')) throw new Error('All filter lists failed to download');
 
-    const out = { network: [], generic: new Set(), genericExceptions: new Set(), specific: {}, exceptions: {} };
+    const out = { network: [], domains: new Set(), generic: new Set(), genericExceptions: new Set(), specific: {}, exceptions: {} };
     const perList = {};
     results.forEach((r, i) => {
       perList[LISTS[i].id] = r.status === 'fulfilled'
@@ -220,7 +254,7 @@ function updateLists() {
         : { ok: false, error: String(r.reason?.message || r.reason) };
     });
 
-    const net = await installNetworkRules(out.network);
+    const net = await installNetworkRules(out.network, out.domains);
 
     for (const s of out.genericExceptions) out.generic.delete(s);
     const cosmeticData = {
@@ -232,6 +266,7 @@ function updateLists() {
       updatedAt: Date.now(),
       networkRules: net.added,
       networkParsed: net.total,
+      blockedDomains: net.domains,
       genericSelectors: cosmeticData.generic.length,
       specificDomains: Object.keys(cosmeticData.specific).length,
       lists: perList
