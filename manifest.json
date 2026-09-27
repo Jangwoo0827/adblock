@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Universal Ad Skipper & Blocker",
+  "version": "1.0.0",
+  "description": "Skips YouTube video ads and removes common ad containers on any website.",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "Universal Ad Skipper & Blocker",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}
