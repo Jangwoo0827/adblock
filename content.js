@@ -38,9 +38,12 @@
   ].join(',');
 
   const SKIP_BUTTONS = [
-    '.ytp-ad-skip-button',
-    '.ytp-ad-skip-button-modern',
     '.ytp-skip-ad-button',
+    '.ytp-ad-skip-button-modern',
+    '.ytp-ad-skip-button',
+    '.ytp-ad-skip-button-slot button',
+    '.ytp-ad-skip-button-container button',
+    '[id^="skip-button"] button',
     'button[id^="skip-button"]'
   ].join(',');
 
@@ -102,6 +105,25 @@
   }
 
   // ---- YouTube Engine ----
+  let adPoll = null;
+
+  function clickSkip() {
+    for (const btn of document.querySelectorAll(SKIP_BUTTONS)) {
+      const rect = btn.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue; // still hidden behind the countdown
+      // Full pointer sequence: YouTube's handlers listen on pointer/mouse events, not just click
+      const opts = {
+        bubbles: true, cancelable: true, composed: true, view: window, button: 0,
+        clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2
+      };
+      btn.dispatchEvent(new PointerEvent('pointerdown', opts));
+      btn.dispatchEvent(new MouseEvent('mousedown', opts));
+      btn.dispatchEvent(new PointerEvent('pointerup', opts));
+      btn.dispatchEvent(new MouseEvent('mouseup', opts));
+      btn.click();
+      return;
+    }
+  }
   function handleYouTubeAd() {
     const player = document.querySelector('.html5-video-player');
     const video = document.querySelector('video.html5-main-video') || document.querySelector('video');
@@ -122,10 +144,14 @@
       if (isFinite(video.duration) && video.duration > 0 && video.currentTime < video.duration - 0.1) {
         video.currentTime = video.duration - 0.1;
       }
-      const skip = document.querySelector(SKIP_BUTTONS);
-      if (skip) skip.click();
+      clickSkip();
+      // The skip button is revealed by an inline-style change after the countdown,
+      // which the observer doesn't see — poll lightly only while an ad is on screen.
+      if (!adPoll) adPoll = setInterval(handleYouTubeAd, 250);
     } else if (adActive) {
       adActive = false;
+      clearInterval(adPoll);
+      adPoll = null;
       video.muted = savedMuted;
       video.playbackRate = savedRate;
     }
@@ -164,6 +190,8 @@
 
   function stop() {
     removeBaselineCss();
+    clearInterval(adPoll);
+    adPoll = null;
     if (observer) {
       observer.disconnect();
       observer = null;
