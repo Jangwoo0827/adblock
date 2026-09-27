@@ -135,6 +135,34 @@
     }
   } catch (_) {}
 
+  // ---- sendBeacon: refuse tracker beacons at the API level ----
+  // sendBeacon() returns true as soon as the beacon is *queued*, before network rules run,
+  // so the page believes it was delivered. Refusing it here makes the drop visible (false).
+  const TRACKER_BEACON = new RegExp('(^|\\.)(' + [
+    'google-analytics\\.com', 'analytics\\.google\\.com', 'googletagmanager\\.com', 'doubleclick\\.net',
+    'googlesyndication\\.com', 'googleadservices\\.com', 'facebook\\.com', 'facebook\\.net',
+    'bat\\.bing\\.com', 'clarity\\.ms', 'hotjar\\.(com|io)', 'scorecardresearch\\.com', 'quantserve\\.com',
+    'segment\\.(io|com)', 'mixpanel\\.com', 'amplitude\\.com', 'heapanalytics\\.com', 'fullstory\\.com',
+    'nr-data\\.net', 'analytics\\.tiktok\\.com', 'ads\\.linkedin\\.com', 'ct\\.pinterest\\.com',
+    'events\\.reddit(media)?\\.com', 'tr\\.snapchat\\.com', 'mc\\.yandex\\.(ru|com)', 'criteo\\.(com|net)',
+    'adnxs\\.com', 'taboola\\.com', 'outbrain\\.com', 'adsrvr\\.org', 'amazon-adsystem\\.com',
+    'posthog\\.com', 'mouseflow\\.com', 'luckyorange\\.(com|net)', 'bugsnag\\.com'
+  ].join('|') + ')$', 'i');
+  if (w.Navigator && typeof Navigator.prototype.sendBeacon === 'function') {
+    const realBeacon = Navigator.prototype.sendBeacon;
+    const sendBeacon = function (url, data) {
+      try {
+        const u = new URL(url, location.href);
+        if (TRACKER_BEACON.test(u.hostname) || /\/(tr|collect|g\/collect|j\/collect)\/?$/.test(u.pathname) && u.hostname !== location.hostname) {
+          return false;
+        }
+      } catch (_) {}
+      return realBeacon.call(this, url, data);
+    };
+    Object.defineProperty(sendBeacon, 'name', { value: 'sendBeacon' });
+    Navigator.prototype.sendBeacon = sendBeacon;
+  }
+
   // ---- AdSense ----
   if (!w.adsbygoogle || Array.isArray(w.adsbygoogle)) {
     w.adsbygoogle = { loaded: true, push: noop };

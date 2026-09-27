@@ -335,39 +335,47 @@ chrome.webNavigation.onCommitted.addListener(async ({ tabId, frameId, url }) => 
 // ============================================================
 //  ON / OFF
 // ============================================================
+// Each step is independent: one rejected call (e.g. a ruleset Chrome refuses) must not
+// stop the others — the page scriptlets in particular were silently never registered before.
 async function applyEnabled(enabled) {
   enabledCache = enabled;
 
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: [PAUSE_RULE_ID],
-    addRules: enabled ? [] : [{
-      id: PAUSE_RULE_ID,
-      priority: 100000,
-      action: { type: 'allowAllRequests' },
-      condition: { resourceTypes: ['main_frame', 'sub_frame'] }
-    }]
-  });
+  try {
+    const registered = await chrome.scripting.getRegisteredContentScripts({ ids: ['scriptlets'] });
+    if (enabled && !registered.length) {
+      await chrome.scripting.registerContentScripts([{
+        id: 'scriptlets',
+        js: ['scriptlets.js'],
+        matches: ['<all_urls>'],
+        runAt: 'document_start',
+        world: 'MAIN',
+        allFrames: true,
+        matchOriginAsFallback: true,
+        persistAcrossSessions: true
+      }]);
+    } else if (!enabled && registered.length) {
+      await chrome.scripting.unregisterContentScripts({ ids: ['scriptlets'] });
+    }
+  } catch (e) { console.warn('[AdSkipper] scriptlet registration failed:', e); }
+
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [PAUSE_RULE_ID],
+      addRules: enabled ? [] : [{
+        id: PAUSE_RULE_ID,
+        priority: 100000,
+        action: { type: 'allowAllRequests' },
+        condition: { resourceTypes: ['main_frame', 'sub_frame'] }
+      }]
+    });
+  } catch (e) { console.warn('[AdSkipper] pause rule update failed:', e); }
 
   const { blockConsent, blockStrict } = await chrome.storage.local.get({ blockConsent: true, blockStrict: true });
-  const on = [], off = [];
-  (enabled ? on : off).push('baseline', 'trackers');
-  (enabled && blockConsent ? on : off).push('consent');
-  (enabled && blockStrict ? on : off).push('strict');
-  await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: on, disableRulesetIds: off });
-
-  const registered = await chrome.scripting.getRegisteredContentScripts({ ids: ['scriptlets'] });
-  if (enabled && !registered.length) {
-    await chrome.scripting.registerContentScripts([{
-      id: 'scriptlets',
-      js: ['scriptlets.js'],
-      matches: ['<all_urls>'],
-      runAt: 'document_start',
-      world: 'MAIN',
-      allFrames: true,
-      persistAcrossSessions: true
-    }]);
-  } else if (!enabled && registered.length) {
-    await chrome.scripting.unregisterContentScripts({ ids: ['scriptlets'] });
+  const want = { baseline: enabled, trackers: enabled, consent: enabled && blockConsent, strict: enabled && blockStrict };
+  for (const [id, on] of Object.entries(want)) {
+    try {
+      await chrome.declarativeNetRequest.updateEnabledRulesets(on ? { enableRulesetIds: [id] } : { disableRulesetIds: [id] });
+    } catch (e) { console.warn(`[AdSkipper] ruleset "${id}" failed:`, e); }
   }
 }
 
@@ -430,6 +438,9 @@ chrome.runtime.onInstalled.addListener(async () => {
   await applyEnabled(await isEnabled());
   updateLists().catch(e => console.warn('[AdSkipper] list update failed:', e));
 });
+
+// Re-assert state whenever the worker wakes (covers reloads where onInstalled ordering failed)
+isEnabled().then(applyEnabled);
 
 chrome.runtime.onStartup.addListener(async () => {
   await applyEnabled(await isEnabled());
