@@ -47,24 +47,44 @@
   let enabled = true;
   let observer = null;
   let scheduled = false;
+  let styleEl = null;
   let pendingCount = 0;
   let flushTimer = null;
   let adActive = false;
   let savedMuted = false;
   let savedRate = 1;
 
-  // ---- Counter: batch storage writes so we never hammer chrome.storage ----
+  // ---- Counter: batched, sent to the background (single writer) ----
   function bump(n = 1) {
     pendingCount += n;
     if (flushTimer) return;
     flushTimer = setTimeout(() => {
       flushTimer = null;
-      const add = pendingCount;
+      const n = pendingCount;
       pendingCount = 0;
-      chrome.storage.local.get({ blockedCount: 0 }, ({ blockedCount }) => {
-        chrome.storage.local.set({ blockedCount: blockedCount + add });
-      });
+      try {
+        chrome.runtime.sendMessage({ type: 'stat', key: 'cosmetic', n }).catch(() => {});
+      } catch (_) { /* extension reloaded */ }
     }, 500);
+  }
+
+  function bumpYouTube() {
+    try {
+      chrome.runtime.sendMessage({ type: 'stat', key: 'youtube', n: 1 }).catch(() => {});
+    } catch (_) {}
+  }
+
+  // ---- Instant CSS at document_start: hides ad slots before first paint.
+  // The full EasyList cosmetic sheet is injected by the background on navigation commit.
+  function injectBaselineCss() {
+    if (styleEl || IS_YOUTUBE) return;
+    styleEl = document.createElement('style');
+    styleEl.textContent = `${AD_SELECTORS}{display:none!important}`;
+    (document.head || document.documentElement).appendChild(styleEl);
+  }
+
+  function removeBaselineCss() {
+    if (styleEl) { styleEl.remove(); styleEl = null; }
   }
 
   // ---- Web Banner Engine ----
@@ -95,7 +115,7 @@
         adActive = true;
         savedMuted = video.muted;
         savedRate = video.playbackRate === 16 ? 1 : video.playbackRate;
-        bump();
+        bumpYouTube();
       }
       video.muted = true;
       if (video.playbackRate !== 16) video.playbackRate = 16;
@@ -129,6 +149,7 @@
   }
 
   function start() {
+    injectBaselineCss();
     if (observer) return;
     observer = new MutationObserver(schedule);
     observer.observe(document.documentElement, {
@@ -142,6 +163,7 @@
   }
 
   function stop() {
+    removeBaselineCss();
     if (observer) {
       observer.disconnect();
       observer = null;
