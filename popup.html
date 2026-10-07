@@ -15,6 +15,7 @@
       }
     }
     * { box-sizing: border-box; margin: 0; }
+    [hidden] { display: none !important; }
     body { width: 320px; background: var(--bg); color: var(--fg);
            font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
 
@@ -66,6 +67,9 @@
     .option { display: flex; align-items: center; gap: 12px; }
     .option b { display: block; font-size: 12.5px; font-weight: 600; }
     .option span { display: block; font-size: 11px; color: var(--muted); }
+    .site b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .site > div { flex: 1; min-width: 0; }
+    .site.off span { color: var(--warn); }
     .switch.small { width: 36px; height: 22px; }
     .switch.small .slider::before { width: 18px; height: 18px; }
     .switch.small input:checked + .slider::before { transform: translateX(14px); }
@@ -93,6 +97,17 @@
   </header>
 
   <main>
+    <section class="card option site" id="siteCard" hidden>
+      <div>
+        <b id="siteName">—</b>
+        <span id="siteStatus">Blocking on this site</span>
+      </div>
+      <label class="switch small" title="Turn blocking on/off for this site">
+        <input type="checkbox" id="siteToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </section>
+
     <section class="hero">
       <div class="count" id="total">0</div>
       <div class="label">ads &amp; trackers stopped</div>

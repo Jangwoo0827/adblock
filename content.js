@@ -195,14 +195,30 @@
     if (document.hidden && enabled) setTimeout(runPass, 0);
   });
 
-  chrome.storage.local.get({ enabled: true }, (data) => {
-    enabled = data.enabled;
-    if (enabled) start();
+  // Active = global switch ON and this site not in the user's per-site off list
+  const settings = { enabled: true, disabledSites: [] };
+
+  function siteOff() {
+    const parts = location.hostname.split('.');
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (settings.disabledSites.includes(parts.slice(i).join('.'))) return true;
+    }
+    return false;
+  }
+
+  function apply() {
+    enabled = settings.enabled && !siteOff();
+    enabled ? start() : stop();
+  }
+
+  chrome.storage.local.get(settings, (data) => {
+    Object.assign(settings, data);
+    apply();
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.enabled) return;
-    enabled = changes.enabled.newValue;
-    enabled ? start() : stop();
+    if (area !== 'local' || !(changes.enabled || changes.disabledSites)) return;
+    for (const k in changes) if (k in settings) settings[k] = changes[k].newValue;
+    apply();
   });
 })();

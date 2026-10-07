@@ -16,6 +16,7 @@ const PLAIN_DOMAIN = /^\|\|([a-z0-9][a-z0-9.-]*\.[a-z0-9-]+)\^$/i;
 const DOMAINS_PER_RULE = 5000;
 
 const PAUSE_RULE_ID = 1;          // allowAllRequests rule used when the blocker is OFF
+const SITE_RULE_ID = 2;           // allowAllRequests rule for sites the user turned off
 const FIRST_LIST_RULE_ID = 1000;  // dynamic rules converted from the lists start here
 const UPDATE_ALARM = 'update-lists';
 const UPDATE_PERIOD_MIN = 24 * 60;
@@ -324,9 +325,20 @@ async function isEnabled() {
   return enabledCache;
 }
 
+// ---- Per-site off switch: stored as bare hostnames ("youtube.com"), matching subdomains too ----
+async function getDisabledSites() {
+  return (await chrome.storage.local.get({ disabledSites: [] })).disabledSites;
+}
+
+function isSiteDisabled(host, sites) {
+  return hostChain(host).some(d => sites.includes(d)) || sites.includes(host);
+}
+
 chrome.webNavigation.onCommitted.addListener(async ({ tabId, frameId, url }) => {
   if (!/^https?:/.test(url) || !(await isEnabled())) return;
-  const css = cssForHost(await getCosmetic(), new URL(url).hostname);
+  const host = new URL(url).hostname;
+  if (isSiteDisabled(host, await getDisabledSites())) return;
+  const css = cssForHost(await getCosmetic(), host);
   if (!css) return;
   chrome.scripting.insertCSS({ target: { tabId, frameIds: [frameId] }, css, origin: 'USER' })
     .catch(() => {}); // tab closed / restricted page
@@ -339,14 +351,19 @@ chrome.webNavigation.onCommitted.addListener(async ({ tabId, frameId, url }) => 
 // stop the others — the page scriptlets in particular were silently never registered before.
 async function applyEnabled(enabled) {
   enabledCache = enabled;
+  const sites = await getDisabledSites();
+  const excludeMatches = sites.flatMap(d => [`*://${d}/*`, `*://*.${d}/*`]);
 
   try {
     const registered = await chrome.scripting.getRegisteredContentScripts({ ids: ['scriptlets'] });
-    if (enabled && !registered.length) {
+    if (enabled && registered.length) {
+      await chrome.scripting.updateContentScripts([{ id: 'scriptlets', excludeMatches }]);
+    } else if (enabled) {
       await chrome.scripting.registerContentScripts([{
         id: 'scriptlets',
         js: ['scriptlets.js'],
         matches: ['<all_urls>'],
+        excludeMatches,
         runAt: 'document_start',
         world: 'MAIN',
         allFrames: true,
@@ -360,13 +377,22 @@ async function applyEnabled(enabled) {
 
   try {
     await chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: [PAUSE_RULE_ID],
-      addRules: enabled ? [] : [{
-        id: PAUSE_RULE_ID,
-        priority: 100000,
-        action: { type: 'allowAllRequests' },
-        condition: { resourceTypes: ['main_frame', 'sub_frame'] }
-      }]
+      removeRuleIds: [PAUSE_RULE_ID, SITE_RULE_ID],
+      addRules: [
+        ...(enabled ? [] : [{
+          id: PAUSE_RULE_ID,
+          priority: 100000,
+          action: { type: 'allowAllRequests' },
+          condition: { resourceTypes: ['main_frame', 'sub_frame'] }
+        }]),
+        // Pages on a turned-off site (and everything they load) bypass every block/redirect/header rule
+        ...(sites.length ? [{
+          id: SITE_RULE_ID,
+          priority: 100000,
+          action: { type: 'allowAllRequests' },
+          condition: { requestDomains: sites, resourceTypes: ['main_frame', 'sub_frame'] }
+        }] : [])
+      ]
     });
   } catch (e) { console.warn('[AdSkipper] pause rule update failed:', e); }
 
@@ -382,7 +408,7 @@ async function applyEnabled(enabled) {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (changes.enabled) applyEnabled(changes.enabled.newValue);
-  else if (changes.blockConsent || changes.blockStrict) isEnabled().then(applyEnabled);
+  else if (changes.blockConsent || changes.blockStrict || changes.disabledSites) isEnabled().then(applyEnabled);
 });
 
 // ============================================================

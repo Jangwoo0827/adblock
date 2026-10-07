@@ -78,6 +78,43 @@ for (const [id, key] of Object.entries(OPTIONS)) {
   $(id).addEventListener('change', () => chrome.storage.local.set({ [key]: $(id).checked }));
 }
 
+// ---- Per-site switch for the active tab ----
+let siteTab = null;
+let siteHost = null;   // stored form: hostname without a leading "www."
+
+function renderSite(disabledSites) {
+  const off = disabledSites.some(d => siteHost === d || siteHost.endsWith('.' + d));
+  $('siteToggle').checked = !off;
+  $('siteCard').classList.toggle('off', off);
+  $('siteStatus').textContent = off ? 'Off on this site — nothing is blocked here' : 'Blocking on this site';
+}
+
+chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+  let url;
+  try { url = new URL(tab.url); } catch (_) { return; }
+  if (!/^https?:$/.test(url.protocol)) return; // chrome://, file://, new tab…
+  siteTab = tab;
+  siteHost = url.hostname.replace(/^www\./, '');
+  $('siteName').textContent = siteHost;
+  $('siteCard').hidden = false;
+  chrome.storage.local.get({ disabledSites: [] }, ({ disabledSites }) => renderSite(disabledSites));
+});
+
+$('siteToggle').addEventListener('change', () => {
+  chrome.storage.local.get({ disabledSites: [] }, ({ disabledSites }) => {
+    const on = $('siteToggle').checked;
+    // Turning back on removes the entry and any parent domain that covered this host
+    const next = on
+      ? disabledSites.filter(d => !(siteHost === d || siteHost.endsWith('.' + d)))
+      : [...new Set([...disabledSites, siteHost])];
+    chrome.storage.local.set({ disabledSites: next }, () => {
+      renderSite(next);
+      // Rules apply to new page loads; give the background a moment to swap them, then reload
+      setTimeout(() => chrome.tabs.reload(siteTab.id), 300);
+    });
+  });
+});
+
 $('update').addEventListener('click', () => {
   setUpdating(true);
   chrome.runtime.sendMessage({ type: 'update' }, res => {
